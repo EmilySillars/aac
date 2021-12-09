@@ -15,6 +15,9 @@ main = do args <- getArgs
               -- mapM_ putStrLn $ sort files
               if null $sort files 
               then die $ "Error: " ++ dir ++ " must contain at least one png file"
-              else putStrLn <$> convert $ minimum files -- one file for now
+              else do
+               let fpath = concat [dir,"/",minimum files]
+               theFile <- convert $ fpath -- one file for now
+               putStrLn theFile
            _ -> do pn <- getProgName
                    die $ "Usage: " ++ pn ++ " <directory path>"

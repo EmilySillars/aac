@@ -4,7 +4,9 @@ Given a directory name, this program will convert every png image in a folder to
 
 Sources:
 
-- https://www.geeksforgeeks.org/converting-image-ascii-image-python/ - https://codereview.stackexchange.com/questions/263823/haskell-convert-an-image-to-ascii-art
+- https://www.geeksforgeeks.org/converting-image-ascii-image-python/ 
+
+- https://codereviewstackexchange.com/questions/263823/haskell-convert-an-image-to-ascii-art
 
 - https://hackage.haskell.org/package/JuicyPixels-3.3.6/docs/Codec-Picture.html
 
