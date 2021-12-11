@@ -3,7 +3,21 @@
 # For more information, please see the documentation at:
 #   https://docs.haskellstack.org/en/stable/lock_files
 
-packages: []
+packages:
+- completed:
+    hackage: JuicyPixels-repa-0.7.1.0@sha256:ffbebd96efbf6af83eb14ee9c89259acf5a9a7d504644f2a35577bd66406ae69,898
+    pantry-tree:
+      size: 222
+      sha256: 951d640678453f8e41fa6aac78eed1fea260d71152abfcd1b7e8c2fe936d2581
+  original:
+    hackage: JuicyPixels-repa-0.7.1.0@sha256:ffbebd96efbf6af83eb14ee9c89259acf5a9a7d504644f2a35577bd66406ae69,898
+- completed:
+    hackage: repa-3.4.1.4@sha256:df02acc0f65be7ff67cf71058841644425337c5ebd44c95b1ac1564a1e3c4858,3323
+    pantry-tree:
+      size: 2965
+      sha256: 2addb474c6f496d26c4335ca4c6a333c746d7f90957d13182c13a1483c6db7e7
+  original:
+    hackage: repa-3.4.1.4@sha256:df02acc0f65be7ff67cf71058841644425337c5ebd44c95b1ac1564a1e3c4858,3323
 snapshots:
 - completed:
     size: 587546

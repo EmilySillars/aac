@@ -34,6 +34,7 @@ library
       JuicyPixels
     , JuicyPixels-repa
     , base >=4.7 && <5
+    , repa
   default-language: Haskell2010
 
 executable aac-exe
@@ -49,6 +50,7 @@ executable aac-exe
     , aac
     , base >=4.7 && <5
     , directory
+    , repa
   default-language: Haskell2010
 
 test-suite aac-test
@@ -64,4 +66,5 @@ test-suite aac-test
     , JuicyPixels-repa
     , aac
     , base >=4.7 && <5
+    , repa
   default-language: Haskell2010

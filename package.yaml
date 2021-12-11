@@ -20,6 +20,7 @@ extra-source-files:
 description:         Please see the README on GitHub at <https://github.com/githubuser/aac#readme>
 
 dependencies:
+- repa
 - JuicyPixels
 - JuicyPixels-repa
 - base >= 4.7 && < 5
@@ -37,6 +38,7 @@ executables:
     - -rtsopts
     - -with-rtsopts=-N
     dependencies:
+    - repa
     - JuicyPixels
     - JuicyPixels-repa
     - aac

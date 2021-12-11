@@ -26,7 +26,7 @@ Building:
 
     stack build
     
-    stack exec aac-exe
+    stack exec aac-exe maya_rudolph_frames
     
     stack run
     
