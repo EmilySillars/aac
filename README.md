@@ -26,7 +26,7 @@ Building:
 
     stack build
     
-    stack exec my-project-exe
+    stack exec aac-exe
     
     stack run
     

@@ -21,6 +21,7 @@ description:         Please see the README on GitHub at <https://github.com/gith
 
 dependencies:
 - JuicyPixels
+- JuicyPixels-repa
 - base >= 4.7 && < 5
 
 library:
@@ -37,6 +38,7 @@ executables:
     - -with-rtsopts=-N
     dependencies:
     - JuicyPixels
+    - JuicyPixels-repa
     - aac
     - directory
     

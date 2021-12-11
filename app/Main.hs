@@ -6,6 +6,7 @@ import System.Directory(listDirectory)
 import Lib(convert) --someFunc
 
 --listDirectory :: FilePath -> IO [FilePath]
+--https://hackage.haskell.org/package/JuicyPixels-repa-0.7.1.0/docs/Codec-Picture-Repa.html
 
 main :: IO ()
 main = do args <- getArgs
