@@ -16,6 +16,8 @@ Sources:
 
 - http://paulbourke.net/dataformats/asciiart/
 
+- https://stackoverflow.com/questions/3232074/what-is-the-best-way-to-convert-string-to-bytestring
+
 Example animation:
 
 - https://media.giphy.com/media/u2Tll62t3t52PGCk0u/giphy.gif
