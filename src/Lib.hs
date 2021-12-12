@@ -5,17 +5,26 @@ where
 
 import Codec.Picture as J
 import Codec.Picture.Repa as R
---import Data.Array.Repa.Index
---import Control.Monad
 import Data.Array.Repa hiding ((++))
 import qualified Data.ByteString.Char8 as B
-import Data.Text (pack)
-import Data.Text.Encoding as TSE
 import Data.List (intercalate)
 import Data.List.Split
+import Data.Text (pack)
+import Data.Text.Encoding as TSE
+import Data.Word (Word8)
 --import Data.Typeable (typeOf)
 --import Data.Word
-import Data.Word (Word8)
+--import Data.Array.Repa.Index
+--import Control.Monad
+
+ramp :: B.ByteString
+ramp =
+  TSE.encodeUtf8 $
+    pack
+      "$@B%8&WM#*oahkbdpqwmZO0QLCJUYXzcvunxrjft/\\|()1{}[]?-_+~<>i!lI;:,\"^`\'. "
+
+gray :: (Double, Double, Double) -> Int
+gray (r, g, b) = round $ 0.2989 * r + 0.5870 * g + 0.1140 * b
 
 --import Codec.Picture.Types (ColorSpaceConvertible(convertImage))
 -- someFunc :: IO ()
@@ -40,32 +49,23 @@ Goals:
 - get out a single pixel's rgba values
 - find out how many pixels (dimensions of repa array)
 - split into tiles and return smaller repa array?
-
 -}
+
 convert :: FilePath -> IO String
 convert png =
   do
     img <- J.readImage png
     case img of
       (Right v) ->
-        return $ dim ++ lamp ++ bi
+        return $ dim ++ bi
         where
-          w =  imageWidth imgRGB
-          dim = "(" ++ show (imageWidth imgRGB) ++ " x " ++ show (imageHeight imgRGB) ++ ")"
           imgRGB = convertRGB8 v
+          w = imageWidth imgRGB
+          h = imageHeight imgRGB
+          dim = "(" ++ show w ++ " x " ++ show h ++ ")\n"
           imgRepa = R.convertImage imgRGB :: Img RGB
-          -- elt = imgData imgRepa ! (Z :. 1 :. 3 :. 1)
-          r = imgData imgRepa ! (Z :. 0 :. 240 :. 0)
-          g = imgData imgRepa ! (Z :. 0 :. 240 :. 1)
-          b = imgData imgRepa ! (Z :. 0 :. 240 :. 2)
-          --   test = show $ reverse $ listOfShape $ extent $ imgData imgRepa
-          vals = show (r, g, b) -- show $ typeOf elt --show elt
-          bi = "noodle \n" ++ babaa 
+          bi = babaa
           babaa = intercalate "\n" $ chunksOf w $ toList $ bijection $ imgData imgRepa
-          lamp = " size " ++ (show $ size $ extent $ imgData imgRepa) ++ " elt " ++ vals ++ "\n"
-      -- paulBourkeRamp = show $ typeOf $ TSE.encodeUtf8 $ pack "$@B%8&WM#*oahkbdpqwmZO0QLCJUYXzcvunxrjft/\\|()1{}[]?-_+~<>i!lI;:,\"^`\'. "
-
-      -- lamp = "size "++ show (size <$> imgRepa) ++"\n"
       (Left err) ->
         return $ "Read Error: " ++ err
 
@@ -84,6 +84,23 @@ convert png =
 - PLImmutable (PLIHackage (PackageIdentifier {pkgName = PackageName "JuicyPixels-repa",
 pkgVersion = mkVersion [0,7,1,0]}) ffbebd96efbf6af83eb14ee9c89259acf5a9a7d504644f2a35577bd66406ae69,898
 (TreeKey 951d640678453f8e41fa6aac78eed1fea260d71152abfcd1b7e8c2fe936d2581,222))
+
+          w = imageWidth imgRGB
+          dim = "(" ++ show (imageWidth imgRGB) ++ " x " ++ show (imageHeight imgRGB) ++ ")"
+          imgRGB = convertRGB8 v
+          imgRepa = R.convertImage imgRGB :: Img RGB
+          -- elt = imgData imgRepa ! (Z :. 1 :. 3 :. 1)
+          r = imgData imgRepa ! (Z :. 0 :. 240 :. 0)
+          g = imgData imgRepa ! (Z :. 0 :. 240 :. 1)
+          b = imgData imgRepa ! (Z :. 0 :. 240 :. 2)
+          --   test = show $ reverse $ listOfShape $ extent $ imgData imgRepa
+          vals = show (r, g, b) -- show $ typeOf elt --show elt
+          bi = "noodle \n" ++ babaa
+          babaa = intercalate "\n" $ chunksOf w $ toList $ bijection $ imgData imgRepa
+          lamp = " size " ++ (show $ size $ extent $ imgData imgRepa) ++ " elt " ++ vals ++ "\n"
+      -- paulBourkeRamp = show $ typeOf $ TSE.encodeUtf8 $ pack "$@B%8&WM#*oahkbdpqwmZO0QLCJUYXzcvunxrjft/\\|()1{}[]?-_+~<>i!lI;:,\"^`\'. "
+
+      -- lamp = "size "++ show (size <$> imgRepa) ++"\n"
 
 -}
 
@@ -109,10 +126,4 @@ bijection pixels = a --computeS a ::Array U DIM2 Word8
            in let b = fromIntegral $ pixels ! (Z :. i :. j :. 2)
                in ramp `B.index` (gray (r, g, b) `mod` 70)
 
-gray :: (Double, Double, Double) -> Int
-gray (r, g, b) = round $ 0.2989 * r + 0.5870 * g + 0.1140 * b
-
-ramp :: B.ByteString
-ramp = TSE.encodeUtf8 $ pack "$@B%8&WM#*oahkbdpqwmZO0QLCJUYXzcvunxrjft/\\|()1{}[]?-_+~<>i!lI;:,\"^`\'. "
-
--- brush = fromListUnboxed (Z:.70) paulBourkeRamp::[char]
+-- surjection :: Array D DIM3 Word8 -> Array D DIM2 Char
