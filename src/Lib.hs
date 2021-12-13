@@ -15,6 +15,8 @@ import Data.Word (Word8)
 import Data.Typeable (typeOf)
 import GHC.ExecutionStack (Location(functionName))
 import Text.Printf (IsChar(toChar))
+import GHC.RTS.Flags (TickyFlags(tickyFile))
+import Control.Monad (join)
 --import Data.Word
 --import Data.Array.Repa.Index
 --import Control.Monad
@@ -23,7 +25,7 @@ ramp :: B.ByteString
 ramp =
   TSE.encodeUtf8 $
     pack
-      "$@B%8&WM#*oahkbdpqwmZO0QLCJUYXzcvunxrjft/\\|()1{}[]?-_+~<>i!lI;:,\"^`\'. "
+     $ reverse "$@B%8&WM#*oahkbdpqwmZO0QLCJUYXzcvunxrjft/\\|()1{}[]?-_+~<>i!lI;:,\"^`\'. "
 
 gray :: (Double, Double, Double) -> Int
 gray (r, g, b) = round $ 0.2989 * r + 0.5870 * g + 0.1140 * b
@@ -66,13 +68,14 @@ convert png =
           h = imageHeight imgRGB
           dim = "(" ++ show w ++ " x " ++ show h ++ ")\n"
           imgRepa = R.convertImage imgRGB :: Img RGB
-          bi = babaa ++ "\n again but smaller: \n" ++ q
+          bi = babaa -- ++ "\n again but smaller: \n" ++ moo
           -- ++ "\n" ++ test ++ "\n" ++ test2 ++ "\n" ++ test3 
                      -- ++ "\n" ++ m ++ n ++ "\nmatrixTest: \n" 
                      -- ++ q ++ "\n matrixTest2:\n" ++ p
         --  test3 = show $ toList t1 == toList t2
           babaa = intercalate "\n" $ chunksOf w $ toList $ bijection $ imgData imgRepa
-          moo = intercalate "\n" $ chunksOf w $ toList $ bijection $ imgData imgRepa
+          --moo = surjection (imgData imgRepa) 40
+          moo = printyPrinty $ surjection (imgData imgRepa) 120
         --   test = show (typeOf $ t1) ++ ": " ++ show (listOfShape $ extent t1)
         --    --  Array D ((:.) ((:.) ((:.) Z Int) Int) Int) Word8
         --   test2 = show (typeOf $ t2) ++ ": " ++ show (listOfShape $ extent t2)
@@ -80,9 +83,17 @@ convert png =
         --   t2 = reshape (Z :. (32::Int) :. (32::Int) :. (4::Int) :. (3::Int)) $ imgData imgRepa
         --   --foldS :: (Shape sh, Source r a, Unbox a) => 
         --   -- (a -> a -> a) -> a -> Array r (sh :. Int) a -> Array U sh a
-        --   matrix = fromListUnboxed (Z :. (2::Int) :. (2::Int)) [1::Int,2,3,4] 
-        --   foldedMatrix = foldS (+) 0 matrix
-        --   m = show matrix ++ "\nfolded: " ++ show foldedMatrix
+          matrix = fromListUnboxed (Z :. (2::Int) :. (2::Int)) [1::Int,2,3,4]
+          --foldedMatrix = foldS (+) 0 matrix
+          aRow = slice matrix (Any :. (0::Int) :. All)
+          zeroth = "\n0th row: " ++ show (toList aRow)
+          oneth = "\n1st row: " ++ show (toList $ slice matrix (Any :. (1::Int) :. All))
+          top = "\nLeft col: " ++ show (toList $ slice matrix (Any :. (0::Int)))
+          bot = "\nRight col: " ++ show (toList $ slice matrix (Any :. (1::Int)))
+          extended = extend (Any :. (2::Int) :. All) matrix --copy a row
+          --filtered = select (isOdd) 
+          m = show matrix ++ zeroth ++ oneth ++ top ++ bot ++ "\n"
+                          ++ show (toList extended)
         --   dumb =concat [[0::Int,0,0], [1,1,1], [2,2,2], [3,3,3],
         --           [0,0,0], [1,1,1], [2,2,2], [3,3,3],
         --           [0,0,0], [1,1,1], [2,2,2], [3,3,3],
@@ -99,16 +110,16 @@ convert png =
 
 matrixTest :: Array D DIM3 Word8 -> Array D DIM2 Char
 matrixTest img = step4
-  where results = "\n" ++ show (typeOf start) ++ "\n" ++ show (typeOf step1) ++ 
+  where results = "\n" ++ show (typeOf start) ++ "\n" ++ show (typeOf step1) ++
                   "\n" ++ show (typeOf step2) ++ " " ++ show (listOfShape $ extent step2) ++
                   "\n" ++ show (typeOf step3)
         -- break into tiles
-        start = reshape (Z :. (32::Int) :. (32::Int) :. (4::Int) :. (3::Int)) img
+        start = reshape (Z :. (32::Int) :. (32::Int) :. (3::Int) :. (4::Int)) img
         -- sum up pixels in each tile
         step1 = toTriple start
         toTriple :: Array D DIM4 Word8 -> Array D DIM3 (Double,Double,Double)
         toTriple st = fromFunction (Z :. (32::Int) :. (32::Int) :. (4::Int)) triple
-          where triple = \(Z :. i :. j :. k) -> 
+          where triple = \(Z :. i :. j :. k) ->
                         let a = fromIntegral $ st ! (Z :. i :. j :. k :. 0)  in
                         let b = fromIntegral $ st ! (Z :. i :. j :. k :. 1) in
                         let c = fromIntegral $ st ! (Z :. i :. j :. k :. 2) in
@@ -116,18 +127,18 @@ matrixTest img = step4
         step2 = foldS (\(a,b,c) (v1,v2,v3) -> (a+v1, b+v2, c+v3)) (0,0,0) step1
         -- divide each sum by number of pixels/tile
         step3 = fromFunction (Z :. (32::Int) :. (32::Int)) func
-          where func = \(Z :. i :. j) -> 
+          where func = \(Z :. i :. j) ->
                         case step2 ! (Z :. i :. j) of
                        (a,b,c) -> (a/4, b/4, c/4)
         step4 = fromFunction (Z :. (32::Int) :. (32::Int)) toChar
-          where toChar = \(Z :. i :. j) -> 
+          where toChar = \(Z :. i :. j) ->
                          let g = gray $ step3 ! (Z :. i :. j) in
                          ramp `B.index` (g `mod` 70)
 
 
 matrixTest2 :: Array D DIM3 Word8 -> Array D DIM2 Char
 matrixTest2 img = step4
-  where results = "\n" ++ show (typeOf start) ++ "\n" ++ show (typeOf step1) ++ 
+  where results = "\n" ++ show (typeOf start) ++ "\n" ++ show (typeOf step1) ++
                   "\n" ++ show (typeOf step2) ++ " " ++ show (listOfShape $ extent step2) ++
                   "\n" ++ show (typeOf step3)
         -- break into tiles
@@ -136,7 +147,7 @@ matrixTest2 img = step4
         step1 = toTriple start
         toTriple :: Array D DIM4 Word8 -> Array D DIM3 (Double,Double,Double)
         toTriple st = fromFunction (Z :. (16::Int) :. (32::Int) :. (8::Int)) triple
-          where triple = \(Z :. i :. j :. k) -> 
+          where triple = \(Z :. i :. j :. k) ->
                         let a = fromIntegral $ st ! (Z :. i :. j :. k :. 0)  in
                         let b = fromIntegral $ st ! (Z :. i :. j :. k :. 1) in
                         let c = fromIntegral $ st ! (Z :. i :. j :. k :. 2) in
@@ -144,18 +155,18 @@ matrixTest2 img = step4
         step2 = foldS (\(a,b,c) (v1,v2,v3) -> (a+v1, b+v2, c+v3)) (0,0,0) step1
         -- divide each sum by number of pixels/tile
         step3 = fromFunction (Z :. (16::Int) :. (32::Int)) func
-          where func = \(Z :. i :. j) -> 
+          where func = \(Z :. i :. j) ->
                         case step2 ! (Z :. i :. j) of
                        (a,b,c) -> (a/8, b/8, c/8)
         step4 = fromFunction (Z :. (16::Int) :. (32::Int)) toChar
-          where toChar = \(Z :. i :. j) -> 
+          where toChar = \(Z :. i :. j) ->
                          let g = gray $ step3 ! (Z :. i :. j) in
                          ramp `B.index` (g `mod` 70)
 
 
 
         -- now just need to take average, turn to gray, and make a character!!!
-             
+
         -- toTriple :: (Int,Int,Int) -> Int -> (Int,Int,Int)
         -- toTriple triple v = case triple of
         --     (-1, -1, -1) -> (v, -1, -1)
@@ -207,6 +218,11 @@ pkgVersion = mkVersion [0,7,1,0]}) ffbebd96efbf6af83eb14ee9c89259acf5a9a7d504644
 -- TS.pack   :: String -> TS.Text
 -- TSE.encodeUtf8 :: TS.Text -> BS.ByteString
 
+printyPrinty :: Array D DIM2 Char -> String
+printyPrinty img = intercalate "\n" $ chunksOf width $ toList img
+    where 
+    [_, width] = reverse $ listOfShape $ extent img
+
 bijection :: Array D DIM3 Word8 -> Array D DIM2 Char
 bijection pixels = a --computeS a ::Array U DIM2 Word8
   where
@@ -218,8 +234,64 @@ bijection pixels = a --computeS a ::Array U DIM2 Word8
            in let b = fromIntegral $ pixels ! (Z :. i :. j :. 2)
                in ramp `B.index` (gray (r, g, b) `mod` 70)
 
-surjection :: Array D DIM3 Word8 -> Array D DIM2 Char
-surjection pixels = b
+surjection :: Array D DIM3 Word8 -> Int -> Array D DIM2 Char
+surjection pixels rows = a--fromFunction (Z:.(2::Int):.(2::Int)) (\(Z:.i:.j) -> 'a') --intercalate "\n" res 
   where
-       b = fromFunction (Z:.10:.1) (\(Z:.i:._) -> head $ show (i * 10))
-       a = pixels
+       res = [wh,rqrs,rat,pwh,printwh,someElts,allTiles]
+       rqrs = "requested cols: " ++ show rows
+       (height : width : _) = reverse $ listOfShape $ extent pixels
+       wh = "(" ++ show width ++ " x " ++ show height ++ ")"
+    --    reduceBy = fromIntegral rows / fromIntegral width
+    --    cols = round $ reduceBy * width
+       rat = "pixel to char ratio: " ++ show ratio
+       ratio = round $ (fromIntegral width) / (fromIntegral rows) -- pixel to char ratio
+       paddedWidth = case r of
+           0 -> width
+           _ -> width + r
+       paddedHeight = case r of
+            0 -> height
+            _-> height + r
+       (q,r) = width `quotRem` ratio
+       pwh = "padded: (" ++ show paddedWidth ++ " x " ++ show paddedHeight ++ ")"
+       -- b = fromFunction (Z:.10:.1) (\(Z:.i:._) -> head $ show (i * 10)) pixels    
+       paddedImage = toIndexedTriple $ fromFunction (Z:.paddedHeight:.paddedWidth:.3) expand
+
+       expand :: DIM3 -> Word8
+       expand (Z:.i:.j:.c)
+        | (i >= height) && (j >= width) =pixels ! (Z:.(height-1):.(width -1):.c)
+        | i >= height = pixels ! (Z:.(height - 1):.j:.c)
+        | j >= width = pixels ! (Z:.i:.(width - 1):.c)
+        | otherwise = pixels ! (Z:.i:.j:.c)
+
+       toIndexedTriple :: Array D DIM3 Word8 -> Array D DIM2 (Int,Int,(Double,Double,Double))
+       toIndexedTriple st = fromFunction (Z:.paddedHeight:.paddedWidth) triple
+         where triple = \(Z :. i :. j) ->
+                       let a = fromIntegral $ st ! (Z :. i :. j :. 0) in
+                       let b = fromIntegral $ st ! (Z :. i :. j :. 1) in
+                       let c = fromIntegral $ st ! (Z :. i :. j :. 2) in
+                       (i,j,(a,b,c))
+       someElts = intercalate " " $ show <$> (take 50 $ toList $ paddedImage)
+       printHeight = round $ (fromIntegral paddedHeight) / (fromIntegral ratio)
+       printWidth = round $ (fromIntegral paddedWidth) / (fromIntegral ratio)
+       printwh = "printing: (" ++ show printWidth ++ " x " ++ show printHeight ++ ")"
+       tiled = fromFunction (Z:.printHeight:.printWidth) tile
+       allTiles ="\nTILES\n" ++ (intercalate " " $ show <$> (toList $ tiled))
+       tile :: DIM2 -> (Double,Double,Double)
+       tile (Z:.i:.j) = if len == 0 then (-99,-99,-99) else (a/len,b/len,c/len) --(a/len,b/len,c/len)
+         where
+             (a,b,c) = foldl (\(a,b,c) (_,_,(v1,v2,v3)) -> (a+v1, b+v2, c+v3)) (0,0,0) members
+             members = filter inTile (toList paddedImage)
+             len = fromIntegral $ length members
+             inTile:: (Int,Int,(Double,Double,Double)) -> Bool
+           --  inTile (x,y,_) = x `mod` 2 == 0
+             inTile (y,x,_) = (x <= right) && (y >= top) && (y <= bottom) && (x >= left)
+               where
+                top = (ratio-1)*i
+                bottom = i + (ratio-1) + ((ratio-1)*i)
+                left = (ratio-1)*j
+                right = j + (ratio-1) + ((ratio-1)*j)
+       a = fromFunction (Z:.printHeight:.printWidth) toChar
+          where toChar = \(Z :. i :. j) ->
+                         let g = gray $ tiled ! (Z :. i :. j) in
+                         ramp `B.index` (g `mod` 70)
+
