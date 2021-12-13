@@ -39,7 +39,10 @@ executables:
     - -Wall
     - -threaded
     - -rtsopts
+    - -eventlog
     - -with-rtsopts=-N
+    - -O2
+    - -fllvm
     dependencies:
     - repa
     - JuicyPixels
@@ -61,5 +64,7 @@ tests:
     - -rtsopts
     - -eventlog
     - -with-rtsopts=-N
+    - -O2
+    - -fllvm
     dependencies:
     - aac

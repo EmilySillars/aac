@@ -46,7 +46,7 @@ executable aac-exe
       Paths_aac
   hs-source-dirs:
       app
-  ghc-options: -Wall -threaded -rtsopts -with-rtsopts=-N
+  ghc-options: -Wall -threaded -rtsopts -eventlog -with-rtsopts=-N -O2 -fllvm
   build-depends:
       JuicyPixels
     , JuicyPixels-repa
@@ -66,7 +66,7 @@ test-suite aac-test
       Paths_aac
   hs-source-dirs:
       test
-  ghc-options: -Wall -threaded -rtsopts -eventlog -with-rtsopts=-N
+  ghc-options: -Wall -threaded -rtsopts -eventlog -with-rtsopts=-N -O2 -fllvm
   build-depends:
       JuicyPixels
     , JuicyPixels-repa
