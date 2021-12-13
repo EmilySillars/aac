@@ -59,6 +59,7 @@ tests:
     - -Wall
     - -threaded
     - -rtsopts
+    - -eventlog
     - -with-rtsopts=-N
     dependencies:
     - aac
