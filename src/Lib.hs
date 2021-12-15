@@ -1,19 +1,22 @@
 module Lib
   ( convert
   ) where
-import qualified Data.ByteString as B
-import qualified Data.ByteString.Lazy as L
-import Control.DeepSeq( NFData)
 import           Codec.Picture                 as J
 import           Codec.Picture.Repa            as R
+import           Control.DeepSeq                ( NFData )
 import           Control.Monad                  ( join )
-import           Data.Array.Repa         hiding ( (++) )
+import           Data.Array.Repa       as A  hiding ( (++) )
+import qualified Data.ByteString               as B
 import qualified Data.ByteString.Char8         as BC
-import           Data.Functor.Identity
-import           Data.List                      ( intercalate )
-import           Data.List.Split
+import qualified Data.ByteString.Lazy          as BL
+import           Data.Functor.Identity as F 
+import qualified Data.List                     as L
+import Data.Vector.Storable as V (toList) 
+
+import           Data.List.Split                ( chunksOf )
 import           Data.Text                      ( pack )
-import           Data.Text.Encoding              as TSE
+import           Data.Text.Encoding            as TSE
+import           Data.Text.Internal.Fusion.Size ( charSize )
 import           Data.Typeable                  ( typeOf )
 import           Data.Word                      ( Word8 )
 import           GHC.ExecutionStack             ( Location(functionName) )
@@ -23,25 +26,26 @@ import           Text.Printf                    ( IsChar(toChar) )
 --import Data.Array.Repa.Index
 --import Control.Monad
 
-convert :: Bool -> L.ByteString  -> String
-convert par png = do
- let img = myReadPng png in
-  case img of
-    (Right v) -> dim ++ bi
-     where
-      imgRGB    = convertRGB8 v
-      w         = imageWidth imgRGB
-      h         = imageHeight imgRGB
-      dim       = "(" ++ show w ++ " x " ++ show h ++ ")\n"
-      imgRepa   = R.convertImage imgRGB :: Img RGB
-      bi        = intercalate "\n" $ chunksOf w $ toList imgAsText
-      imgAsText = if par
-        then bijectionP $ imgData imgRepa
-        else bijection $ imgData imgRepa
-    (Left err) -> "Read Error: " ++ err
+convert :: Bool -> BL.ByteString -> String
+convert par png =
+  let img = myReadPng png
+  in
+    case img of
+      (Right v) -> imgAsText
+       where
+        imgRGB    = convertRGB8 v
+        -- w         = imageWidth imgRGB
+        -- h         = imageHeight imgRGB
+        -- dim       = "(" ++ show w ++ " x " ++ show h ++ ")\n"
+       -- imgRepa   = R.convertImage imgRGB :: Img RGB
+       -- bi        = L.intercalate "\n" $ chunksOf w $ A.toList imgAsText
+        imgAsText = if par
+          then bijectionPar imgRGB
+          else bijectionPar imgRGB
+      (Left err) -> "Read Error: " ++ err
 
-bijection :: Array D DIM3 Word8 -> Array U DIM2 Char
-bijection pixels = computeS a :: Array U DIM2 Char
+bijection :: Array D DIM3 Word8 -> Array D DIM2 Char
+bijection pixels = a -- :: Array D DIM2 Char
  where
   (height : width : _) = reverse $ listOfShape $ extent pixels
   a                    = fromFunction (Z :. height :. width) toGray
@@ -69,13 +73,88 @@ bijectionP pixels = runIdentity $ computeP a
         in  let b = fromIntegral $ pixels ! (Z :. i :. j :. 2)
             in  ramp `BC.index` (gray (r, g, b) `mod` 70)
 
-myReadPng :: L.ByteString -> Either String DynamicImage
+myReadPng :: BL.ByteString -> Either String DynamicImage
 myReadPng = myWithImageDecoder J.decodeImage
 
-myWithImageDecoder :: (NFData a)
-                 => (B.ByteString -> Either String a) -> L.ByteString 
-                 -> Either String a
-myWithImageDecoder decoder path = decoder $ L.toStrict path
+myWithImageDecoder
+  :: (NFData a)
+  => (B.ByteString -> Either String a)
+  -> BL.ByteString
+  -> Either String a
+myWithImageDecoder decoder path = decoder $ BL.toStrict path
+
+-- convertFrame :: BL.ByteString -> BC.ByteString 
+-- convertFrame frame = 
+--   case myReadPng frame of
+--     (Right v) -> toSingleString $ bijection $ imgData imgRepa
+--      where
+--       imgRepa   = R.convertImage $ convertRGB8 v :: Img RGB
+--     (Left err) -> BC.pack $ "Read Error: " ++ err
+--convertAnimation frames = fromFunction (extent frames) (\i -> convertFrame (frames ! i) )   
+-- convertAnimation
+--   :: Array D DIM1 BL.ByteString -> (Int, Int) -> Array D DIM3 Char
+-- convertAnimation frames (w, h) = fromFunction
+--   (Z :. s :. h :. w)
+--   (\(Z :. i :. j :. k) ->
+--     let frame = convertFrame $ frames ! (Z :. (i :: Int))
+--     in  frame ! (Z :. (j :: Int) :. (k :: Int))
+--   )
+--   where [s] = listOfShape $ extent frames
+
+
+toSingleString :: Array D DIM2 Char -> BC.ByteString
+toSingleString chars = BC.pack $ L.intercalate "\n" $ chunksOf w $ A.toList chars
+  where [_, w] = reverse $ listOfShape $ extent chars
+
+  -- (Z:.(i::Int):.(j::Int):.(k::Int) 
+  --          = frame ! (Z:.(j::Int):.(k::Int)) 
+  --         where frame = convertFrame (frames ! (Z:.(i::Int))) in
+
+-- helper :: Array D Dim2 Char -> Array D DIM3 Char
+-- helper frame = fromFunction sh (sh -> a)
+--bijection :: Array D DIM3 Word8 -> Array U DIM2 Char
+
+-- convertFrame :: BL.ByteString -> Array D DIM2 Char
+-- convertFrame frame = case myReadPng frame of
+--   (Right v) -> bijection $ imgData imgRepa
+--     where imgRepa = R.convertImage $ convertRGB8 v -- :: ImageRGB8
+--   (Left err) -> fromFunction (Z :. 1 :. length msg)
+--                              (\(z :. 0 :. j) -> msg !! j)
+--     where msg = "Read Error: " ++ err
+
+
+bijectionPar :: Image PixelRGB8 -> String
+bijectionPar img = L.intercalate "\n" $ chunksOf (imageWidth img) chars
+ where
+    chars = (\px->  ramp `BC.index` (fromIntegral px `mod` 70)) <$>  V.toList pixels
+    pixels = imageData grayImg
+    grayImg = pixelMap toGray img
+    toGray :: PixelRGB8 -> Pixel8 
+    toGray (PixelRGB8 r g b) = round $ 0.2989 * fromIntegral r + 0.5870 * fromIntegral g + 0.1140 * fromIntegral b
+    --pixelMap :: forall a b. (Pixel a, Pixel b) => (a -> b) -> Image a -> Image b 
+
+  -- (height : width : _) = reverse $ listOfShape $ extent pixels
+  -- a                    = fromFunction (Z :. height :. width) toGray
+  -- toGray               = \(Z :. i :. j) ->
+  --   let r = fromIntegral $ pixels ! (Z :. i :. j :. 0)
+  --   in  let g = fromIntegral $ pixels ! (Z :. i :. j :. 1)
+  --       in  let b = fromIntegral $ pixels ! (Z :. i :. j :. 2)
+          --  in  ramp `BC.index` (gray (r, g, b) `mod` 70)
+
+{-
+brightnessRGB8 :: Int -> Image PixelRGB8 -> Image PixelRGB8
+brightnessRGB8 add = pixelMap brightFunction
+     where up v = fromIntegral (fromIntegral v + add)
+           brightFunction (PixelRGB8 r g b) =
+                   PixelRGB8 (up r) (up g) (up b)
+
+
+
+-}
+
+
+
+
 -- matrixTest :: Array D DIM3 Word8 -> Array D DIM2 Char
 -- matrixTest img = step4
 --   where results = "\n" ++ show (typeOf start) ++ "\n" ++ show (typeOf step1) ++

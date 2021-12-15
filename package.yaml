@@ -29,6 +29,7 @@ dependencies:
 - ansi-terminal
 - Rasterific
 - parallel
+- vector
 - monad-par
 - deepseq
 - FontyFruity
@@ -58,6 +59,7 @@ executables:
     - split
     - ansi-terminal
     - parallel
+    - vector
     - monad-par
     - deepseq
     - FontyFruity

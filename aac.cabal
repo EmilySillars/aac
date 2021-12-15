@@ -44,6 +44,7 @@ library
     , repa
     , split
     , text
+    , vector
   default-language: Haskell2010
 
 executable aac-exe
@@ -69,6 +70,7 @@ executable aac-exe
     , repa
     , split
     , text
+    , vector
   default-language: Haskell2010
 
 test-suite aac-test
@@ -94,4 +96,5 @@ test-suite aac-test
     , repa
     , split
     , text
+    , vector
   default-language: Haskell2010
