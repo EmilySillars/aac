@@ -26,6 +26,12 @@ dependencies:
 - bytestring
 - text
 - split
+- ansi-terminal
+- Rasterific
+- parallel
+- monad-par
+- deepseq
+- FontyFruity
 - base >= 4.7 && < 5
 
 library:
@@ -50,6 +56,12 @@ executables:
     - bytestring
     - text
     - split
+    - ansi-terminal
+    - parallel
+    - monad-par
+    - deepseq
+    - FontyFruity
+    - Rasterific
     - aac
     - directory
     

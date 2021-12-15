@@ -31,10 +31,16 @@ library
   hs-source-dirs:
       src
   build-depends:
-      JuicyPixels
+      FontyFruity
+    , JuicyPixels
     , JuicyPixels-repa
+    , Rasterific
+    , ansi-terminal
     , base >=4.7 && <5
     , bytestring
+    , deepseq
+    , monad-par
+    , parallel
     , repa
     , split
     , text
@@ -48,12 +54,18 @@ executable aac-exe
       app
   ghc-options: -Wall -threaded -rtsopts -eventlog -with-rtsopts=-N -O2 -fllvm
   build-depends:
-      JuicyPixels
+      FontyFruity
+    , JuicyPixels
     , JuicyPixels-repa
+    , Rasterific
     , aac
+    , ansi-terminal
     , base >=4.7 && <5
     , bytestring
+    , deepseq
     , directory
+    , monad-par
+    , parallel
     , repa
     , split
     , text
@@ -68,11 +80,17 @@ test-suite aac-test
       test
   ghc-options: -Wall -threaded -rtsopts -eventlog -with-rtsopts=-N -O2 -fllvm
   build-depends:
-      JuicyPixels
+      FontyFruity
+    , JuicyPixels
     , JuicyPixels-repa
+    , Rasterific
     , aac
+    , ansi-terminal
     , base >=4.7 && <5
     , bytestring
+    , deepseq
+    , monad-par
+    , parallel
     , repa
     , split
     , text

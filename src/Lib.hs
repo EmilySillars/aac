@@ -1,17 +1,19 @@
 module Lib
   ( convert
   ) where
-
+import qualified Data.ByteString as B
+import qualified Data.ByteString.Lazy as L
+import Control.DeepSeq( NFData)
 import           Codec.Picture                 as J
 import           Codec.Picture.Repa            as R
 import           Control.Monad                  ( join )
 import           Data.Array.Repa         hiding ( (++) )
-import qualified Data.ByteString.Char8         as B
+import qualified Data.ByteString.Char8         as BC
 import           Data.Functor.Identity
 import           Data.List                      ( intercalate )
 import           Data.List.Split
 import           Data.Text                      ( pack )
-import           Data.Text.Encoding            as TSE
+import           Data.Text.Encoding              as TSE
 import           Data.Typeable                  ( typeOf )
 import           Data.Word                      ( Word8 )
 import           GHC.ExecutionStack             ( Location(functionName) )
@@ -21,11 +23,11 @@ import           Text.Printf                    ( IsChar(toChar) )
 --import Data.Array.Repa.Index
 --import Control.Monad
 
-convert :: Bool -> FilePath -> IO String
+convert :: Bool -> L.ByteString  -> String
 convert par png = do
-  img <- J.readImage png
+ let img = myReadPng png in
   case img of
-    (Right v) -> return $ dim ++ bi
+    (Right v) -> dim ++ bi
      where
       imgRGB    = convertRGB8 v
       w         = imageWidth imgRGB
@@ -36,7 +38,7 @@ convert par png = do
       imgAsText = if par
         then bijectionP $ imgData imgRepa
         else bijection $ imgData imgRepa
-    (Left err) -> return $ "Read Error: " ++ err
+    (Left err) -> "Read Error: " ++ err
 
 bijection :: Array D DIM3 Word8 -> Array U DIM2 Char
 bijection pixels = computeS a :: Array U DIM2 Char
@@ -47,7 +49,7 @@ bijection pixels = computeS a :: Array U DIM2 Char
     let r = fromIntegral $ pixels ! (Z :. i :. j :. 0)
     in  let g = fromIntegral $ pixels ! (Z :. i :. j :. 1)
         in  let b = fromIntegral $ pixels ! (Z :. i :. j :. 2)
-            in  ramp `B.index` (gray (r, g, b) `mod` 70)
+            in  ramp `BC.index` (gray (r, g, b) `mod` 70)
 
 ramp :: B.ByteString
 ramp = TSE.encodeUtf8 $ pack $ reverse
@@ -65,9 +67,15 @@ bijectionP pixels = runIdentity $ computeP a
     let r = fromIntegral $ pixels ! (Z :. i :. j :. 0)
     in  let g = fromIntegral $ pixels ! (Z :. i :. j :. 1)
         in  let b = fromIntegral $ pixels ! (Z :. i :. j :. 2)
-            in  ramp `B.index` (gray (r, g, b) `mod` 70)
+            in  ramp `BC.index` (gray (r, g, b) `mod` 70)
 
+myReadPng :: L.ByteString -> Either String DynamicImage
+myReadPng = myWithImageDecoder J.decodeImage
 
+myWithImageDecoder :: (NFData a)
+                 => (B.ByteString -> Either String a) -> L.ByteString 
+                 -> Either String a
+myWithImageDecoder decoder path = decoder $ L.toStrict path
 -- matrixTest :: Array D DIM3 Word8 -> Array D DIM2 Char
 -- matrixTest img = step4
 --   where results = "\n" ++ show (typeOf start) ++ "\n" ++ show (typeOf step1) ++
