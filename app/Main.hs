@@ -1,7 +1,13 @@
 module Main where
 import           Data.List                      ( sort
                                                 , intercalate )
-import           Lib                            ( convert)
+import           Lib                            ( convert
+                                                 , convertP
+                                                 , convertS
+                                                 , convertIVar
+                                                 , convertRepa
+                                                 , convertAnimation
+                                                 , readLazyImg)
 import           System.Directory               ( listDirectory )
 import           System.Environment             ( getArgs
                                                 , getProgName
@@ -9,12 +15,13 @@ import           System.Environment             ( getArgs
 import           System.Exit                    ( die ) --someFunc
 import qualified Control.Exception as Exc ( catch, IOException )
 import qualified Data.ByteString.Lazy as BL
---import System.Console.ANSI
+import qualified Data.ByteString.Char8         as BC
+-- import System.Console.ANSI
 import Control.Monad.Par(parMap, runPar)
 --import Control.Parallel.Strategies hiding (parMap)
 --import Control.Monad (join)
 --import Data.Bits (Bits(xor))
-import  Control.Parallel.Strategies(using,  parList,  rdeepseq)
+import  Control.Parallel.Strategies(using,  parList,  rdeepseq, runEval)
 import           Data.Array.Repa         hiding ( (++) )
 import           Data.Functor.Identity
 import           Data.List.Split (chunksOf)
@@ -54,31 +61,20 @@ main :: IO ()
 main = do
     args <- getArgs
     case args of
-        [dir, "p"] -> do -- parallel
+        [dir, "-repa"] -> do -- repa all the way down
             files <- listDirectory dir
-            --mapM_ putStrLn (sort files)
             if null $ sort files
-                then
+            then
                     die
                     $  "Error: "
                     ++ dir
                     ++ " must contain at least one png file"
-                else do
-                   -- converted <- ((convert True. (\x -> concat [dir, "/", x]))) `parMap` files
-                      --let lazyFiles = (\x -> L.readFile $ concat [dir, "/", x]) <$> files
-                      lazyFrames <- rewrap $ (\x -> BL.readFile $ concat [dir, "/", x]) <$> files
-                     -- let test = fromFunction (Z :. length lazyFrames) (fromListLazy lazyFrames)
-                      -- let test = fromListUnboxed (Z :. (length prepFiles)) prepFiles -- no dice here
-                      --let converted = runPar $ (convert True) `parMap` lazyFrames   
-                    --  let converted = runIdentity $ computeP (convertAnimation test (480,343)) :: Array U DIM3 Char 
-                    --  let asText = toSingleString `parMap` (toList converted)        
-                      -- mapM_  putStrLn converted
-                      --let test = convert True <$> lazyFrames
-                      let converted = runPar $ (convert True) `parMap` lazyFrames
-                      mapM_ putStrLn $ converted
-                    -- a <- head converted
-                    -- b <- converted !!
-                    --  mapM_ putStrLn (toStrings (length lazyFrames,480) converted)
+            else 
+             do lazyFrames <- rewrap $ (\x -> BL.readFile $ concat [dir, "/", x]) <$> files
+                let test = fromFunction (Z :. length lazyFrames) (fromListLazy lazyFrames) 
+                let converted = runIdentity $ computeP (convertAnimation test (480,343)) :: Array U DIM3 Char 
+                mapM_ putStrLn (toStrings (length lazyFrames,480) converted)
+                --mapM_ putStrLn ["hey"]
         [dir] -> do -- sequential
             files <- listDirectory dir
             if null $ sort files
@@ -89,11 +85,61 @@ main = do
                     ++ " must contain at least one png file"
                 else do
                       let converted = (\x-> do 
-                                            y <- BL.readFile $ concat [dir, "/", x]
-                                            return $ convert True y) <$> files                      
+                                            convertS $ concat [dir, "/", x]
+                                            ) <$> files                      
                       mapM_ (\x -> (do
                                     str <- x
                                     putStrLn  str)) converted
+        [dir, "-repa-seq-read"] 
+         -> do -- sequential read
+            files <- listDirectory dir
+            if null $ sort files
+                then
+                    die
+                    $  "Error: "
+                    ++ dir
+                    ++ " must contain at least one png file"
+                else do
+                       let converted = (\x-> do 
+                                            convertP $ concat [dir, "/", x]
+                                            ) <$> files                      
+                       mapM_ (\x -> (do
+                                    str <- x
+                                    putStrLn  str)) converted
+        [dir, "-repa-par-read"] 
+         -> do -- parallel read
+            files <- listDirectory dir
+            if null $ sort files
+                then
+                    die
+                    $  "Error: "
+                    ++ dir
+                    ++ " must contain at least one png file"
+                else do
+                      -- read in part of each file sequentially
+                      lazyFrames <- rewrap $ (\x -> BL.readFile $ concat [dir, "/", x]) <$> files
+                      let frames = runPar $ readLazyImg `parMap` lazyFrames
+                      -- convert files sequentially
+                      -- with each image's pixel conversions in parallel  
+                      let converted = convertRepa <$> frames 
+                       -- print result sequentially
+                      mapM_ putStrLn converted
+        [dir, "-ivars"]
+         -> do
+            files <- listDirectory dir
+            if null $ sort files
+                then
+                    die
+                    $  "Error: "
+                    ++ dir
+                    ++ " must contain at least one png file"
+                else do
+                      -- read in part of each file sequentially
+                      lazyFrames <- rewrap $ (\x -> BL.readFile $ concat [dir, "/", x]) <$> files
+                      -- convert each file in parallel
+                      let converted = runPar $ convertIVar `parMap` lazyFrames
+                      -- print result sequentially
+                      mapM_ putStrLn converted
         _ -> do
             pn <- getProgName
             die $ "Usage: " ++ pn ++ " <directory path> <optional p flag>"

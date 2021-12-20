@@ -28,8 +28,8 @@ Building:
 
     stack build
     
-    stack exec aac-exe low_res_frames
+    stack exec aac-exe <directory name> <optional flags>
     
-    stack run
+    stack run -- +RTS -N4 -ls -RTS <directory name> <optional flags>
     
     stack install

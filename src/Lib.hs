@@ -1,10 +1,17 @@
 module Lib
   ( convert
+  , convertS
+  , convertP
+  , convertIVar
+  , convertRepa
+  , convertAnimation
+  , readLazyImg
   ) where
 import           Codec.Picture                 as J
 import           Codec.Picture.Repa            as R
 import           Control.DeepSeq                ( NFData )
 import           Control.Monad                  ( join )
+import Control.Monad.Par(parMap, runPar)
 import           Data.Array.Repa       as A  hiding ( (++) )
 import qualified Data.ByteString               as B
 import qualified Data.ByteString.Char8         as BC
@@ -22,6 +29,7 @@ import           Data.Word                      ( Word8 )
 import           GHC.ExecutionStack             ( Location(functionName) )
 import           GHC.RTS.Flags                  ( TickyFlags(tickyFile) )
 import           Text.Printf                    ( IsChar(toChar) )
+import Control.Parallel.Strategies (rdeepseq, parList,using, runEval)
 --import Data.Word
 --import Data.Array.Repa.Index
 --import Control.Monad
@@ -40,12 +48,34 @@ convert par png =
        -- imgRepa   = R.convertImage imgRGB :: Img RGB
        -- bi        = L.intercalate "\n" $ chunksOf w $ A.toList imgAsText
         imgAsText = if par
-          then bijectionPar imgRGB
-          else bijectionPar imgRGB
+          then bijectionIVar imgRGB
+          else bijectionIVar imgRGB
       (Left err) -> "Read Error: " ++ err
 
+-- convertS :: Either String DynamicImage -> String
+-- convertS png = case png of
+--   (Right v) ->  L.intercalate "\n" $ chunksOf w $ A.toList imgAsText
+--        where img = convertRGB8 v
+--              w         = imageWidth img
+--              imgAsText = bijection $ imgData imgRepa
+--              imgRepa   = R.convertImage img :: Img RGB
+--   (Left err) -> "Read Error: " ++ err
+
+convertS :: FilePath -> IO String
+convertS png = do
+  img <- J.readImage png
+  case img of
+    (Right v) -> return bi
+     where
+      imgRGB    = convertRGB8 v
+      w         = imageWidth imgRGB
+      imgRepa   = R.convertImage imgRGB :: Img RGB
+      bi        = L.intercalate "\n" $ chunksOf w $ A.toList imgAsText
+      imgAsText = bijectionS $ imgData imgRepa
+    (Left err) -> return $ "Read Error: " ++ err
+
 bijection :: Array D DIM3 Word8 -> Array D DIM2 Char
-bijection pixels = a -- :: Array D DIM2 Char
+bijection pixels = a -- :: Array D DIM2 Char -- computeS a 
  where
   (height : width : _) = reverse $ listOfShape $ extent pixels
   a                    = fromFunction (Z :. height :. width) toGray
@@ -55,12 +85,53 @@ bijection pixels = a -- :: Array D DIM2 Char
         in  let b = fromIntegral $ pixels ! (Z :. i :. j :. 2)
             in  ramp `BC.index` (gray (r, g, b) `mod` 70)
 
+bijectionS :: Array D DIM3 Word8 -> Array U DIM2 Char
+bijectionS pixels = computeS a -- :: Array D DIM2 Char -- computeS a 
+ where
+  (height : width : _) = reverse $ listOfShape $ extent pixels
+  a                    = fromFunction (Z :. height :. width) toGray
+  toGray               = \(Z :. i :. j) ->
+    let r = fromIntegral $ pixels ! (Z :. i :. j :. 0)
+    in  let g = fromIntegral $ pixels ! (Z :. i :. j :. 1)
+        in  let b = fromIntegral $ pixels ! (Z :. i :. j :. 2)
+            in  ramp `BC.index` (gray (r, g, b) `mod` 70)
+
+convertP :: FilePath -> IO String
+convertP png = do
+  img <- J.readImage png
+  case img of
+    (Right v) -> return bi
+     where
+      imgRGB    = convertRGB8 v
+      w         = imageWidth imgRGB
+      imgRepa   = R.convertImage imgRGB :: Img RGB
+      bi        = L.intercalate "\n" $ chunksOf w $ A.toList imgAsText
+      imgAsText = bijectionP $ imgData imgRepa
+    (Left err) -> return $ "Read Error: " ++ err
+
 ramp :: B.ByteString
 ramp = TSE.encodeUtf8 $ pack $ reverse
   "$@B%8&WM#*oahkbdpqwmZO0QLCJUYXzcvunxrjft/\\|()1{}[]?-_+~<>i!lI;:,\"^`\'. "
 
 gray :: (Double, Double, Double) -> Int
 gray (r, g, b) = round $ 0.2989 * r + 0.5870 * g + 0.1140 * b
+
+readLazyImg :: BL.ByteString -> Either String (Image PixelRGB8)
+readLazyImg png =
+    -- finish reading in file (convert from lazy to strict bytestring)
+  let img = myReadPng png
+  in
+    case img of
+      -- convert file to Juicy Pixel image
+      (Right v) -> Right (convertRGB8 v)
+      (Left err) -> Left ("Read Error: " ++ err)
+
+convertRepa :: Either String (Image PixelRGB8) -> String 
+convertRepa (Left err) = err 
+convertRepa (Right img) = L.intercalate "\n" $ chunksOf w $ A.toList imgAsText
+  where repaImg = R.convertImage img :: Img RGB
+        imgAsText = bijectionP $ imgData repaImg
+        (_ : w : _) = reverse $ listOfShape $ extent $ imgData repaImg
 
 bijectionP :: Array D DIM3 Word8 -> Array U DIM2 Char
 bijectionP pixels = runIdentity $ computeP a
@@ -91,15 +162,15 @@ myWithImageDecoder decoder path = decoder $ BL.toStrict path
 --       imgRepa   = R.convertImage $ convertRGB8 v :: Img RGB
 --     (Left err) -> BC.pack $ "Read Error: " ++ err
 --convertAnimation frames = fromFunction (extent frames) (\i -> convertFrame (frames ! i) )   
--- convertAnimation
---   :: Array D DIM1 BL.ByteString -> (Int, Int) -> Array D DIM3 Char
--- convertAnimation frames (w, h) = fromFunction
---   (Z :. s :. h :. w)
---   (\(Z :. i :. j :. k) ->
---     let frame = convertFrame $ frames ! (Z :. (i :: Int))
---     in  frame ! (Z :. (j :: Int) :. (k :: Int))
---   )
---   where [s] = listOfShape $ extent frames
+convertAnimation
+  :: Array D DIM1 BL.ByteString -> (Int, Int) -> Array D DIM3 Char
+convertAnimation frames (w, h) = fromFunction
+  (Z :. s :. h :. w)
+  (\(Z :. i :. j :. k) ->
+    let frame = convertFrame $ frames ! (Z :. (i :: Int))
+    in  frame ! (Z :. (j :: Int) :. (k :: Int))
+  )
+  where [s] = listOfShape $ extent frames
 
 
 toSingleString :: Array D DIM2 Char -> BC.ByteString
@@ -114,23 +185,77 @@ toSingleString chars = BC.pack $ L.intercalate "\n" $ chunksOf w $ A.toList char
 -- helper frame = fromFunction sh (sh -> a)
 --bijection :: Array D DIM3 Word8 -> Array U DIM2 Char
 
--- convertFrame :: BL.ByteString -> Array D DIM2 Char
--- convertFrame frame = case myReadPng frame of
---   (Right v) -> bijection $ imgData imgRepa
---     where imgRepa = R.convertImage $ convertRGB8 v -- :: ImageRGB8
---   (Left err) -> fromFunction (Z :. 1 :. length msg)
---                              (\(z :. 0 :. j) -> msg !! j)
---     where msg = "Read Error: " ++ err
+convertFrame :: BL.ByteString -> Array D DIM2 Char
+convertFrame frame = case myReadPng frame of
+  (Right v) -> bijection $ imgData imgRepa
+    where imgRGB = convertRGB8 v 
+          imgRepa = R.convertImage imgRGB :: Img RGB
+  (Left err) -> fromFunction (Z :. 1 :. length msg)
+                             (\(z :. 0 :. j) -> msg !! j)
+    where msg = "Read Error: " ++ err
 
+convertIVar :: BL.ByteString -> String
+convertIVar png =
+  -- finish reading in file (convert from lazy to strict bytestring)
+  let img = myReadPng png
+  in
+    case img of
+      (Right v) -> imgAsText
+       where
+        -- convert image to text
+        imgAsText = bijectionIVar imgRGB
+        -- represent each pixel with three bytes, one for R, G, and B
+        imgRGB    = convertRGB8 v 
+      (Left err) -> "Read Error: " ++ err
 
-bijectionPar :: Image PixelRGB8 -> String
-bijectionPar img = L.intercalate "\n" $ chunksOf (imageWidth img) chars
+bijectionIVar :: Image PixelRGB8 -> String
+bijectionIVar img = 
+ -- separate each row of characters with a newline
+ L.intercalate "\n" $ chunksOf (imageWidth img) chars
  where
-    chars = (\px->  ramp `BC.index` (fromIntegral px `mod` 70)) <$>  V.toList pixels
+   -- convert pixels to ascii characters in parallel
+    chars = runPar $ toChar `parMap` V.toList pixels
+    toChar = \px-> ramp `BC.index` (fromIntegral px `mod` 70)
     pixels = imageData grayImg
+    -- convert color pixels to gray pixels sequentially
     grayImg = pixelMap toGray img
     toGray :: PixelRGB8 -> Pixel8 
-    toGray (PixelRGB8 r g b) = round $ 0.2989 * fromIntegral r + 0.5870 * fromIntegral g + 0.1140 * fromIntegral b
+    toGray (PixelRGB8 r g b) = 
+      round $ 0.2989 * fromIntegral r + 
+              0.5870 * fromIntegral g + 
+              0.1140 * fromIntegral b
+
+-- convertStrat :: BL.ByteString -> String
+-- convertStrat png =
+--   -- finish reading in file (convert from lazy to strict bytestring)
+--   let img = myReadPng png
+--   in
+--     case img of
+--       (Right v) -> imgAsText
+--        where
+--         -- convert image to text
+--         imgAsText = bijectionIVar imgRGB
+--         -- represent each pixel with three bytes, one for R, G, and B
+--         imgRGB    = convertRGB8 v 
+--       (Left err) -> "Read Error: " ++ err
+
+-- bijectionStrat :: Image PixelRGB8 -> String
+-- bijectionStrat img = 
+--  -- separate each row of characters with a newline
+--  L.intercalate "\n" $ chunksOf (imageWidth img) chars
+--  where
+--    -- convert pixels to ascii characters in parallel
+--     chars = runEval (toChar `parList` V.toList pixels `using` rdeepseq)
+--     toChar :: Word8 -> Char
+--     toChar px = ramp `BC.index` (fromIntegral px `mod` 70)
+--     pixels = imageData grayImg
+--     -- convert color pixels to gray pixels sequentially
+--     grayImg = pixelMap toGray img
+--     toGray :: PixelRGB8 -> Pixel8 
+--     toGray (PixelRGB8 r g b) = 
+--       round $ 0.2989 * fromIntegral r + 
+--               0.5870 * fromIntegral g + 
+--               0.1140 * fromIntegral b
     --pixelMap :: forall a b. (Pixel a, Pixel b) => (a -> b) -> Image a -> Image b 
 
   -- (height : width : _) = reverse $ listOfShape $ extent pixels
