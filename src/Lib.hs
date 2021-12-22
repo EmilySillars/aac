@@ -5,27 +5,39 @@ module Lib
   , readLazyImg
   ) where
 import           Codec.Picture                 as J
-import Codec.Picture.Repa as R ( convertImage, Img(imgData), RGB )
+import           Codec.Picture.Repa            as R
+                                                ( Img(imgData)
+                                                , RGB
+                                                , convertImage
+                                                )
 import           Control.DeepSeq                ( NFData )
 import           Control.Monad                  ( join )
-import Control.Monad.Par(parMap, runPar)
-import           Data.Array.Repa       as A  hiding ( (++) )
+import           Control.Monad.Par              ( parMap
+                                                , runPar
+                                                )
+import           Control.Parallel.Strategies    ( parList
+                                                , rdeepseq
+                                                , runEval
+                                                , using
+                                                )
+import           Data.Array.Repa               as A
+                                         hiding ( (++) )
 import qualified Data.ByteString               as B
 import qualified Data.ByteString.Char8         as BC
 import qualified Data.ByteString.Lazy          as BL
-import           Data.Functor.Identity as F 
+import           Data.Functor.Identity         as F
 import qualified Data.List                     as L
-import Data.Vector.Storable as V (toList) 
 import           Data.List.Split                ( chunksOf )
 import           Data.Text                      ( pack )
 import           Data.Text.Encoding            as TSE
 import           Data.Text.Internal.Fusion.Size ( charSize )
 import           Data.Typeable                  ( typeOf )
+import           Data.Vector.Storable          as V
+                                                ( toList )
 import           Data.Word                      ( Word8 )
 import           GHC.ExecutionStack             ( Location(functionName) )
 import           GHC.RTS.Flags                  ( TickyFlags(tickyFile) )
 import           Text.Printf                    ( IsChar(toChar) )
-import Control.Parallel.Strategies (rdeepseq, parList,using, runEval)
 
 
 -- Paul Bourke's 70 levels of gray character ramp
@@ -70,12 +82,13 @@ surjectionS pixels = computeS a -- :: Array D DIM2 Char -- computeS a
 
 -- convert image to ascii array, then convert to string
 -- top level wrapper for surjectionP
-convertRepa :: Either String (Image PixelRGB8) -> String 
-convertRepa (Left err) = err 
+convertRepa :: Either String (Image PixelRGB8) -> String
+convertRepa (Left  err) = err
 convertRepa (Right img) = L.intercalate "\n" $ chunksOf w $ A.toList imgAsText
-  where repaImg = R.convertImage img :: Img RGB
-        imgAsText = surjectionP $ imgData repaImg
-        (_ : w : _) = reverse $ listOfShape $ extent $ imgData repaImg
+ where
+  repaImg     = R.convertImage img :: Img RGB
+  imgAsText   = surjectionP $ imgData repaImg
+  (_ : w : _) = reverse $ listOfShape $ extent $ imgData repaImg
 
 -- parallel image to ascii conversion using REPA
 surjectionP :: Array D DIM3 Word8 -> Array U DIM2 Char
@@ -96,33 +109,36 @@ convertIVar :: BL.ByteString -> String
 convertIVar png =
   -- finish reading in file (convert from lazy to strict bytestring)
   let img = myReadPng png
-  in
-    case img of
-      (Right v) -> imgAsText
-       where
-        -- convert image to text
-        imgAsText = surjectionIVar imgRGB
-        -- represent each pixel with three bytes, one for R, G, and B
-        imgRGB    = convertRGB8 v 
-      (Left err) -> "Read Error: " ++ err
+  in  case img of
+        (Right v) -> imgAsText
+         where
+          -- convert image to text
+          imgAsText = surjectionIVar imgRGB
+          -- represent each pixel with three bytes, one for R, G, and B
+          imgRGB    = convertRGB8 v
+        (Left err) -> "Read Error: " ++ err
 
 -- parallel image to ascii conversion using parmap on gray pixels
 surjectionIVar :: Image PixelRGB8 -> String
-surjectionIVar img = 
+surjectionIVar img =
  -- separate each row of characters with a newline
- L.intercalate "\n" $ chunksOf (imageWidth img) chars
+                     L.intercalate "\n" $ chunksOf (imageWidth img) chars
  where
    -- convert pixels to ascii characters in parallel
-    chars = runPar $ toChar `parMap` V.toList pixels
-    toChar = \px-> ramp `BC.index` (fromIntegral px `mod` 70)
-    pixels = imageData grayImg
-    -- convert color pixels to gray pixels sequentially
-    grayImg = pixelMap toGray img
-    toGray :: PixelRGB8 -> Pixel8 
-    toGray (PixelRGB8 r g b) = 
-      round $ 0.2989 * fromIntegral r + 
-              0.5870 * fromIntegral g + 
-              0.1140 * fromIntegral b
+  chars   = runPar $ toChar `parMap` V.toList pixels
+  toChar  = \px -> ramp `BC.index` (fromIntegral px `mod` 70)
+  pixels  = imageData grayImg
+  -- convert color pixels to gray pixels sequentially
+  grayImg = pixelMap toGray img
+  toGray :: PixelRGB8 -> Pixel8
+  toGray (PixelRGB8 r g b) =
+    round
+      $ 0.2989
+      * fromIntegral r
+      + 0.5870
+      * fromIntegral g
+      + 0.1140
+      * fromIntegral b
 
 -- | Parallel Reading Helper Functions 
 
@@ -131,11 +147,10 @@ readLazyImg :: BL.ByteString -> Either String (Image PixelRGB8)
 readLazyImg png =
     -- finish reading in file (convert from lazy to strict bytestring)
   let img = myReadPng png
-  in
-    case img of
-      -- convert file to Juicy Pixel image
-      (Right v) -> Right (convertRGB8 v)
-      (Left err) -> Left ("Read Error: " ++ err)
+  in  case img of
+          -- convert file to Juicy Pixel image
+        (Right v  ) -> Right (convertRGB8 v)
+        (Left  err) -> Left ("Read Error: " ++ err)
 
 myReadPng :: BL.ByteString -> Either String DynamicImage
 myReadPng = myWithImageDecoder J.decodeImage
@@ -146,4 +161,4 @@ myWithImageDecoder
   -> BL.ByteString
   -> Either String a
 myWithImageDecoder decoder path = decoder $ BL.toStrict path
-   
+
