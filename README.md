@@ -6,7 +6,7 @@ Sources:
 
 - https://www.geeksforgeeks.org/converting-image-ascii-image-python/ 
 
-- https://codereviewstackexchange.com/questions/263823/haskell-convert-an-image-to-ascii-art
+- https://codereviewstackexchange.com/questions/263823/
 
 - https://hackage.haskell.org/package/JuicyPixels-3.3.6/docs/Codec-Picture.html
 
