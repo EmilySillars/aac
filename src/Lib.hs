@@ -1,14 +1,11 @@
 module Lib
-  ( 
-  convertS
-  , convertP
+  ( convertS
   , convertIVar
   , convertRepa
-  , convertAnimation
   , readLazyImg
   ) where
 import           Codec.Picture                 as J
-import           Codec.Picture.Repa            as R
+import Codec.Picture.Repa as R ( convertImage, Img(imgData), RGB )
 import           Control.DeepSeq                ( NFData )
 import           Control.Monad                  ( join )
 import Control.Monad.Par(parMap, runPar)
@@ -70,21 +67,6 @@ surjectionS pixels = computeS a -- :: Array D DIM2 Char -- computeS a
             in  ramp `BC.index` (gray (r, g, b) `mod` 70)
 
 -- | parMap + REPA version 
-
--- convert an image to ascii and return as string
--- helper for parMap+REPA implementation
-convertP :: FilePath -> IO String
-convertP png = do
-  img <- J.readImage png
-  case img of
-    (Right v) -> return bi
-     where
-      imgRGB    = convertRGB8 v
-      w         = imageWidth imgRGB
-      imgRepa   = R.convertImage imgRGB :: Img RGB
-      bi        = L.intercalate "\n" $ chunksOf w $ A.toList imgAsText
-      imgAsText = surjectionP $ imgData imgRepa
-    (Left err) -> return $ "Read Error: " ++ err
 
 -- convert image to ascii array, then convert to string
 -- top level wrapper for surjectionP
@@ -164,41 +146,4 @@ myWithImageDecoder
   -> BL.ByteString
   -> Either String a
 myWithImageDecoder decoder path = decoder $ BL.toStrict path
-
    
-
-
-
-
--- for REPA all the way down
-convertAnimation
-  :: Array D DIM1 BL.ByteString -> (Int, Int) -> Array D DIM3 Char
-convertAnimation frames (w, h) = fromFunction
-  (Z :. s :. h :. w)
-  (\(Z :. i :. j :. k) ->
-    let frame = convertFrame $ frames ! (Z :. (i :: Int))
-    in  frame ! (Z :. (j :: Int) :. (k :: Int))
-  )
-  where [s] = listOfShape $ extent frames
-
-
-surjection :: Array D DIM3 Word8 -> Array D DIM2 Char
-surjection pixels = a -- :: Array D DIM2 Char -- computeS a 
- where
-  (height : width : _) = reverse $ listOfShape $ extent pixels
-  a                    = fromFunction (Z :. height :. width) toGray
-  toGray               = \(Z :. i :. j) ->
-    let r = fromIntegral $ pixels ! (Z :. i :. j :. 0)
-    in  let g = fromIntegral $ pixels ! (Z :. i :. j :. 1)
-        in  let b = fromIntegral $ pixels ! (Z :. i :. j :. 2)
-            in  ramp `BC.index` (gray (r, g, b) `mod` 70)
-
-convertFrame :: BL.ByteString -> Array D DIM2 Char
-convertFrame frame = case myReadPng frame of
-  (Right v) -> surjection $ imgData imgRepa
-    where imgRGB = convertRGB8 v 
-          imgRepa = R.convertImage imgRGB :: Img RGB
-  (Left err) -> fromFunction (Z :. 1 :. length msg)
-                             (\(z :. 0 :. j) -> msg !! j)
-    where msg = "Read Error: " ++ err
-
